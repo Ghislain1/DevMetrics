@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # sample.ts ist typisierter Platzhalter und enthält Textfragmente wie
       # "eval() in Template-Auswertung" — Suchtreffer wären dort kein Befund.
