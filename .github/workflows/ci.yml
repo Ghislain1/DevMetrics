@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Bun-Setup
         uses: oven-sh/setup-bun@v2
@@ -40,7 +40,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Bun-Cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -87,7 +87,7 @@ jobs:
           fi
 
       - name: Build-Output hochladen
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: devmetrics-build
           path: |
