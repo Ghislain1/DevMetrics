@@ -1,0 +1,106 @@
+name: Electron Security
+
+# Setzt die fünf Sicherheits-Invarianten aus AGENTS.md als harten Gate durch.
+# Muster und Schweregrade entsprechen Schritt 4 von `.opencode/command/check.md`.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boundary:
+    name: Main/Preload/Renderer-Grenze
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # sample.ts ist typisierter Platzhalter und enthält Textfragmente wie
+      # "eval() in Template-Auswertung" — Suchtreffer wären dort kein Befund.
+      - name: Verbotene Muster
+        run: |
+          set -uo pipefail
+
+          SCAN=(src ':!src/renderer/metrics/sample.ts')
+          RENDERER=(src/renderer ':!src/renderer/metrics/sample.ts')
+
+          failed=0
+
+          check() {
+            severity="$1"
+            title="$2"
+            pattern="$3"
+            shift 3
+            matches=$(git grep -nE -- "$pattern" "$@" || true)
+            if [ -n "$matches" ]; then
+              echo "::error title=Security $severity — $title::"
+              echo "$matches"
+              failed=1
+            else
+              echo "OK ($severity) $title"
+            fi
+          }
+
+          check "kritisch" "contextIsolation abgeschaltet" 'contextIsolation:[[:space:]]*false' "${SCAN[@]}"
+          check "kritisch" "nodeIntegration aktiviert"    'nodeIntegration:[[:space:]]*true' "${SCAN[@]}"
+          check "kritisch" "webSecurity abgeschaltet"    'webSecurity:[[:space:]]*false' "${SCAN[@]}"
+          check "hoch"     "sandbox abgeschaltet"        'sandbox:[[:space:]]*false' "${SCAN[@]}"
+          check "kritisch" "dangerouslySetInnerHTML"     'dangerouslySetInnerHTML' "${SCAN[@]}"
+          check "kritisch" "eval()"                     '(^|[^[:alnum:]_$.])eval[[:space:]]*\(' "${SCAN[@]}"
+          check "kritisch" "new Function"               'new[[:space:]]+Function[[:space:]]*\(' "${SCAN[@]}"
+          check "kritisch" "webview"                    '<webview' "${SCAN[@]}"
+
+          # Ab hier nur der Renderer: im Main-Prozess sind Node-Imports erlaubt
+          # und nötig, der Renderer darf sie nicht haben.
+          check "kritisch" "Renderer importiert Main/Preload" "from[[:space:]]+[\"']\\.\\./\\.\\./(main|preload)" "${RENDERER[@]}"
+          check "kritisch" "Renderer bindet Node"    "require\\(|from[[:space:]]+[\"'\`]node:|window\\.require" "${RENDERER[@]}"
+          check "kritisch" "Renderer spricht direkt mit Electron" 'ipcRenderer|\bremote\b|process\.(env|versions|platform)|webviewTag' "${RENDERER[@]}"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Renderer-/Main-Grenze verletzt (AGENTS.md, Sicherheits-Invarianten 1–5)"
+            exit 1
+          fi
+
+      - name: Einzige Brücke ist contextBridge
+        run: |
+          set -uo pipefail
+          failed=0
+
+          # Invariante 2/3: Der Renderer ruft nur window.electronAPI auf.
+          direct=$(git grep -nE -- 'ipcRenderer|\bremote\b|window\.require|process\.(env|versions|platform)' \
+            src/renderer ':!src/renderer/metrics/sample.ts' || true)
+          if [ -n "$direct" ]; then
+            echo "::error title=Security kritisch — Renderer greift direkt auf Electron/Node zu::"
+            echo "$direct"
+            failed=1
+          else
+            echo "OK (kritisch) Renderer nutzt ausschließlich window.electronAPI"
+          fi
+
+          # Invariante 3: exposeInMainWorld darf nur serialisierbare Werte erhalten.
+          # Das lässt sich nicht greppen — der Fund wird deshalb nur protokolliert
+          # und muss im Review geprüft werden.
+          bridges=$(git grep -n -- 'exposeInMainWorld' src/preload || true)
+          if [ -z "$bridges" ]; then
+            echo "::error::Kein contextBridge.exposeInMainWorld in src/preload — Invariante 2 verletzt"
+            failed=1
+          else
+            echo "::notice title=Review::exposeInMainWorld-Fundstellen (nur serialisierbare Werte?):"
+            echo "$bridges"
+          fi
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi

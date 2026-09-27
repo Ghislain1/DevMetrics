@@ -1,0 +1,97 @@
+name: CI
+
+# Gate-Check laut AGENTS.md: Typecheck + Build + Artefakte. `bun run tsc --noEmit`
+# ist der einzige automatisierte Check im Repo — Linter und Tests gibt es nicht.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Bun-Version aus README (bun init, v1.4.2) — mit dem Repo-Bump mitziehen.
+  BUN_VERSION: "1.4.2"
+  # Baustelle 4 in AGENTS.md: der Renderer-Bundle ist MUI plus Emotion. Das Budget
+  # ist eine Obergrenze, kein Ziel — es soll nur verhindern, dass er unbemerkt wächst.
+  RENDERER_BUNDLE_BUDGET: "1500000"
+
+jobs:
+  gate:
+    name: Typecheck & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bun-Setup
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Bun-Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run tsc --noEmit
+
+      - name: Build
+        run: bun run build
+
+      - name: Artefakte prüfen
+        run: |
+          set -euo pipefail
+          for artifact in out/main/main.cjs out/preload/preload.cjs dist/renderer/index.html; do
+            if [ ! -f "$artifact" ]; then
+              echo "::error::Build-Artefakt fehlt: $artifact"
+              exit 1
+            fi
+            echo "OK $artifact"
+          done
+
+      - name: Bundle-Budget
+        run: |
+          set -euo pipefail
+          largest=$(ls -S dist/renderer/assets/*.js | head -n 1)
+          size=$(stat -c%s "$largest")
+          echo "Größter Renderer-Chunk: $largest ($size Bytes, Budget $RENDERER_BUNDLE_BUDGET)"
+          if [ "$size" -gt "$RENDERER_BUNDLE_BUDGET" ]; then
+            echo "::error::Renderer-Bundle über Budget — manualChunks prüfen (AGENTS.md, Baustelle 4)"
+            exit 1
+          fi
+
+      - name: Working tree sauber
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Build hat den Working tree verändert:"
+            git status --short
+            exit 1
+          fi
+
+      - name: Build-Output hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: devmetrics-build
+          path: |
+            out/
+            dist/renderer/
+          retention-days: 7
+          if-no-files-found: error
