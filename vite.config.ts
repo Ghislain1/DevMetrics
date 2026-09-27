@@ -12,7 +12,7 @@ export default defineConfig({
     },
 
     server: {
-        port: 5173,
+        port: 4200,
         strictPort: true
     }
 });

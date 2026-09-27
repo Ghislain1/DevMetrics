@@ -1,0 +1,33 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "share": "disabled",
+    "permission": {
+        "bash": {
+            "*": "ask",
+            "bun install*": "allow",
+            "bun run dev*": "allow",
+            "bun run build*": "allow",
+            "bun run preview*": "allow",
+            "bun run tsc*": "allow",
+            "bun test*": "allow",
+            "git status*": "allow",
+            "git diff*": "allow",
+            "git log*": "allow",
+            "git show*": "allow",
+            "git add*": "ask",
+            "git commit*": "ask",
+            "git push*": "ask",
+            "git reset --hard*": "deny",
+            "git clean*": "deny",
+            "rm -rf*": "deny",
+            "Remove-Item*Recurse*": "deny"
+        },
+        "external_directory": {
+            "*": "ask"
+        }
+    },
+    "compaction": {
+        "auto": true,
+        "prune": true
+    }
+}
