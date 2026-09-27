@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "out/main/main.cjs",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "tsc": "tsc"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -21,6 +23,10 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.4.0",
+    "@mui/material": "^9.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   }
