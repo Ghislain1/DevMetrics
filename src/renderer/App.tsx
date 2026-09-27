@@ -12,7 +12,9 @@ import {
     ListItemButton,
     ListItemIcon,
     ListItemText,
+    CssBaseline,
     Stack,
+    ThemeProvider,
     Toolbar,
     Tooltip,
     Typography
@@ -26,8 +28,10 @@ import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
+import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
 
 import { DRAWER_WIDTH } from "./theme";
+import { useColorMode } from "./hooks/useColorMode";
 import CodeSmellsView from "./views/CodeSmellsView";
 import BenchmarksView from "./views/BenchmarksView";
 import ComplexityView from "./views/ComplexityView";
@@ -60,6 +64,8 @@ function App() {
 
     const [active, setActive] = useState<ViewId>("overview");
     const [drawerOpen, setDrawerOpen] = useState(false);
+
+    const { mode, theme, toggleMode } = useColorMode();
 
     const current = NAV.find((entry) => entry.id === active) ?? NAV[0]!;
     const View = current.view;
@@ -125,83 +131,89 @@ function App() {
     );
 
     return (
-        <Box sx={{ display: "flex", height: "100vh" }}>
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
 
-            <AppBar
-                position="fixed"
-                sx={{
-                    zIndex: (theme) => theme.zIndex.drawer + 1,
-                    transition: (theme) => theme.transitions.create(["width", "left"])
-                }}
-            >
-                <Toolbar sx={{ gap: 2 }}>
-                    <IconButton
-                        color="inherit"
-                        edge="start"
-                        onClick={() => setDrawerOpen((open) => !open)}
-                        sx={{ display: { md: "none" } }}
-                    >
-                        <MenuRoundedIcon />
-                    </IconButton>
+            <Box sx={{ display: "flex", height: "100vh" }}>
 
-                    <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-                            {current.label}
-                        </Typography>
-                        <Typography variant="caption" color="text.disabled">
-                            devmetrics · vor 6 h analysiert
-                        </Typography>
-                    </Box>
-
-                    <Chip
-                        size="small"
-                        color="warning"
-                        variant="outlined"
-                        label="Quality 87"
-                    />
-
-                    <Tooltip title="Design ist im Dark Mode fixiert — hell folgt mit dem Theme-Toggle">
-                        <IconButton color="inherit" size="small" disabled>
-                            <LightModeRoundedIcon fontSize="small" />
+                <AppBar
+                    position="fixed"
+                    sx={{
+                        zIndex: (t) => t.zIndex.drawer + 1,
+                        transition: (t) => t.transitions.create(["width", "left"])
+                    }}
+                >
+                    <Toolbar sx={{ gap: 2 }}>
+                        <IconButton
+                            color="inherit"
+                            edge="start"
+                            onClick={() => setDrawerOpen((open) => !open)}
+                            sx={{ display: { md: "none" } }}
+                        >
+                            <MenuRoundedIcon />
                         </IconButton>
-                    </Tooltip>
-                </Toolbar>
-            </AppBar>
 
-            <Drawer
-                variant="temporary"
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                ModalProps={{ keepMounted: true }}
-                sx={{
-                    display: { xs: "block", md: "none" },
-                    "& .MuiDrawer-paper": { width: DRAWER_WIDTH, boxSizing: "border-box" }
-                }}
-            >
-                {drawerContent}
-            </Drawer>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                                {current.label}
+                            </Typography>
+                            <Typography variant="caption" color="text.disabled">
+                                devmetrics · vor 6 h analysiert
+                            </Typography>
+                        </Box>
 
-            <Drawer
-                variant="permanent"
-                sx={{
-                    display: { xs: "none", md: "block" },
-                    width: DRAWER_WIDTH,
-                    flexShrink: 0,
-                    "& .MuiDrawer-paper": { width: DRAWER_WIDTH, boxSizing: "border-box" }
-                }}
-            >
-                {drawerContent}
-            </Drawer>
+                        <Chip
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            label="Quality 87"
+                        />
 
-            <Box component="main" sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                <Toolbar />
+                        <Tooltip title={mode === "dark" ? "Zu hellem Design wechseln" : "Zu dunklem Design wechseln"}>
+                            <IconButton color="inherit" size="small" onClick={toggleMode}>
+                                {mode === "dark"
+                                    ? <LightModeRoundedIcon fontSize="small" />
+                                    : <DarkModeRoundedIcon fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    </Toolbar>
+                </AppBar>
 
-                <Box sx={{ flexGrow: 1, p: 3, overflowY: "auto" }}>
-                    <View />
+                <Drawer
+                    variant="temporary"
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    ModalProps={{ keepMounted: true }}
+                    sx={{
+                        display: { xs: "block", md: "none" },
+                        "& .MuiDrawer-paper": { width: DRAWER_WIDTH, boxSizing: "border-box" }
+                    }}
+                >
+                    {drawerContent}
+                </Drawer>
+
+                <Drawer
+                    variant="permanent"
+                    sx={{
+                        display: { xs: "none", md: "block" },
+                        width: DRAWER_WIDTH,
+                        flexShrink: 0,
+                        "& .MuiDrawer-paper": { width: DRAWER_WIDTH, boxSizing: "border-box" }
+                    }}
+                >
+                    {drawerContent}
+                </Drawer>
+
+                <Box component="main" sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                    <Toolbar />
+
+                    <Box sx={{ flexGrow: 1, p: 3, overflowY: "auto" }}>
+                        <View />
+                    </Box>
                 </Box>
-            </Box>
 
-        </Box>
+            </Box>
+        </ThemeProvider>
     );
 
 }

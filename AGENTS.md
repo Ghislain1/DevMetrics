@@ -25,12 +25,17 @@ sie im Tasksystem fest und priorisiere sie im Review.
 
 | Pfad | Inhalt |
 | --- | --- |
+| `electron.vite.config.ts` | Einzige Build-Config: Main, Preload, Renderer |
 | `src/main/main.ts` | Electron Main: Fenster, App-Lifecycle, Dateisystem-/Prozesszugriff |
 | `src/preload/preload.ts` | **Einzige** Brücke: `contextBridge.exposeInMainWorld("electronAPI", ...)` |
-| `src/renderer/index.html` | Renderer-Entry für Vite |
-| `src/renderer/main.tsx` | React-Mount |
-| `src/renderer/App.tsx` | Sidebar-Navigation + Views |
-| `src/renderer/style.css` | Styles, flach, eine Datei |
+| `src/renderer/index.html` | Renderer-Entry für Vite, trägt die CSP-`meta` |
+| `src/renderer/main.tsx` | React-Mount, mountet `App` unter `StrictMode` |
+| `src/renderer/theme.ts` | Light- und Dark-Theme aus einem Token-Set, einzige Quelle für Farben und Overrides |
+| `src/renderer/hooks/` | `useColorMode.ts`: Modus-State, `localStorage`-Persistenz, Toggle |
+| `src/renderer/App.tsx` | `ThemeProvider` + `CssBaseline`, AppBar, Drawer-Navigation, View-Umschalter |
+| `src/renderer/components/` | Wiederverwendbare Bausteine: `MetricCard`, `SectionCard`, `Sparkline`, `StatusChip`, `ViewState` |
+| `src/renderer/views/` | Eine Datei pro Sidebar-Eintrag |
+| `src/renderer/metrics/` | `types.ts`, `format.ts` (Einheiten), `status.ts` (Ampel), `sample.ts` (Platzhalter) |
 | `out/` | Build-Output Main + Preload (gitignored) |
 | `dist/renderer/` | Build-Output Renderer (gitignored) |
 
@@ -58,8 +63,15 @@ Diese fünf Punkte sind nicht verhandelbar. Bei Verstoß: `electron-security` Ag
 - React: Function Components, JSX in `.tsx`, Hooks am Top der Komponente.
 - TypeScript: `strict` ist aktiv. Kein `any`, keine nicht-leeren Assertions außer
   `document.getElementById("root")!` im Mount.
-- CSS-Klassen sind flach und BEM- lite: `app`, `sidebar`, `content`, `cards`, `card`.
-  Kein CSS-Framework, keine CSS-in-JS.
+- **UI ist MUI 9** (`@mui/material` + `@mui/icons-material` + Emotion). Styling läuft über
+  `sx` und `theme.ts` — es gibt keine CSS-Datei und kein CSS-in-JS. Der Renderer
+  tree-shakes Icons über Deep-Imports (`@mui/icons-material/DashboardRounded`), nie über
+  den Barrel `@mui/icons-material`.
+- MUI 9 hat `Stack`-Flexprops (`alignItems`, `justifyContent`, `flexWrap`) und
+  `Chip fullWidth` **entfernt** — solche Werte gehören in `sx`.
+- Keine Farbliterale in Komponenten und Views: der Renderer läuft in beiden Modi, also
+  greifen Komponenten ausschließlich auf `palette`-Tokens zu. Neue Farben kommen als
+  weiteres Token in `TOKENS` in `theme.ts`.
 - Kommentare sparsam und auf Deutsch oder Englisch. Erkläre **warum**, nicht **was**.
 
 ## Metrik-Domänen
@@ -78,26 +90,20 @@ Neue Metriken baust du mit dem Skill `devmetrics-metric` oder dem Command
 
 Verifiziert am aktuellen Stand des Repos — vor dem Beheben prüfen, ob es noch gilt.
 
-1. **Build-Config ist inkonsistent.** Die Scripts rufen `electron-vite`, im Root liegt
-   aber nur `vite.config.ts` (reines Vite, `root: "src/renderer"`, kein Main-/Preload-Build).
-   Eine `electron.vite.config.*` fehlt, `out/main/main.js` existiert zwar im Ordner, wird
-   aber von keinem Config erzeugt. Entweder electron-vite-Config anlegen oder die Scripts
-   auf `vite` umstellen — nicht beides halb.
-2. **Typecheck ist rot.** `bun run tsc --noEmit` bricht ab mit
-   `TS2882: Cannot find module or type declarations for side-effect import of './style.css'`
-   (`src/renderer/main.tsx:5`). Fix: `src/renderer/vite-env.d.ts` mit
-   `/// <reference types="vite/client" />` anlegen.
-3. **Toter File.** `src/renderer/preload.ts` ist leer. Der Preload gehört nach
-   `src/preload/preload.ts`; die Datei im Renderer löschen.
-4. **Kein Dev/Prod-Unterschied.** `src/main/main.ts:30` lädt hart `http://localhost:5173`.
-   Im Build fehlt `loadFile` auf `dist/renderer/index.html` sowie
-   `ELECTRON_RENDERER_URL` per `process.env`.
-5. **App-Lifecycle unvollständig.** Kein `window-all-closed`, kein `activate`-Handler,
-   Fenster-Referenz wird nicht gehalten.
-6. **README ist veraltet.** Beschreibt `bun init` und `bun run index.ts`; eine
+1. **Kein Renderer-State.** Die Views rendern `src/renderer/metrics/sample.ts` — typisierte
+   Platzhalter. Der Aggregator liefert noch nicht über IPC, es gibt kein Routing und keine
+   Persistenz. `ViewState` und `ViewError` sind vorhanden, werden aber nur in `ProjectsView`
+   demonstriert. Nächster Schritt: `sample.ts` durch einen IPC-Client auf
+   `window.electronAPI` ersetzen, ohne die Views anzufassen.
+2. **Preload ist leer.** `src/preload/preload.ts` enthält noch keinen
+   `contextBridge`-Aufruf. Damit fehlt die einzige Brücke zwischen Renderer und Main.
+3. **Kein Routing.** Der View-Umschalter ist `useState` in `App.tsx`. Kein
+   Deep-Linking, keine View merkt sich ihren Zustand über einen Remount hinweg.
+4. **Bundle-Größe.** Der Renderer-Bundle liegt bei ~1,16 MB unkomprimiert. Das ist MUI
+   plus Emotion, kein Fehlkonfiguration — aber es lohnt sich, `manualChunks` zu prüfen,
+   sobald echte Daten fließen.
+5. **README ist veraltet.** Beschreibt `bun init` und `bun run index.ts`; eine
    `index.ts` existiert nicht. Auf die echten Befehle umstellen.
-7. **Kein Renderer-State.** `App.tsx` rendert hardcodierte Werte (`87%`, `10`, `4.2`).
-   Es gibt noch keine Datenquelle, kein Routing und keine Fehler-/Leerzustände.
 
 ## Definition of Done
 
