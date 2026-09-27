@@ -175,8 +175,24 @@ läuft die Session mit dem alten Stand.
 opencode mcp list
 ```
 
-Der Status muss `connected` zeigen. Alternativ `opencode mcp add mui` für eine globale
-Registrierung.
+Erwartet wird `✓ mui connected`. Bleibt es bei `✗ mui failed`, hilft die Fehlermeldung:
+
+| Symptom | Ursache | Fix |
+| --- | --- | --- |
+| `MCP error -32000: Connection closed` | npx-Cache für `@mui/mcp` unvollständig (typisch: `Cannot find module .../zod/v3/index.cjs`) | `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_npx\<hash>"` — der Hash steht in der Fehlermeldung. Alternativ dauerhaft ohne npx auskommen, s. u. |
+| `Error: Unexpected error / no such column: workspace.project_id` | Zwei opencode-Versionen teilen sich eine Datenbank: eine ältere CLI (1.x) trifft eine von der Desktop-App (2.x) migrierte `opencode.db` | Die ältere CLI entfernen oder mit eigenem `XDG_DATA_HOME` starten — **nicht** die `opencode.db` löschen, das sind die Sessions |
+
+Ohne npx, dafür stabil und pinnbar:
+
+```bash
+npm install --global @mui/mcp
+```
+
+```json
+"mui": { "type": "local", "command": ["mcp"], "enabled": true }
+```
+
+Alternativ `opencode mcp add mui` für eine Registrierung in der globalen Config.
 
 ### Beispiel: Doku-Recherche
 
